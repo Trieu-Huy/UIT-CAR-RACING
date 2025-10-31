@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # UIT-CAR-RACING
 # Unity Autonomous Road Segmentation & Navigation
 
@@ -71,6 +71,9 @@ Run the following command in VScode to run the project:
 ```
   python maycay.py
 ```
+<<<<<<< HEAD
 =======
 # UIT-CAR-RACING
 >>>>>>> 683791e (Initial commit)
+=======
+>>>>>>> 152320a81da450ae7fab50677db8e5cddf9f4a6f
