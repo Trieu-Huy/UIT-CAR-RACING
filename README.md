@@ -26,7 +26,7 @@ Make sure you have the following installed:
 - **Python 3.8 – 3.10**
 - **Visual Studio Code** (Versions before March 2025)
 - **Docker environment** [(web)](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-20-04)
-- **Unity Map** [(web)](https://drive.google.com/file/d/1On6iAmioqvXPbQl20_R3ndLwDB5msQj9/view)
+- **Unity Map** [(drive)](https://drive.google.com/file/d/1On6iAmioqvXPbQl20_R3ndLwDB5msQj9/view)
 ```bash
 docker pull quocle28/it_car_2023:v1
 ```
