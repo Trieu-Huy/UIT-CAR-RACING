@@ -61,7 +61,6 @@ def main():
     print("\n[Thành công] Quá trình huấn luyện đã hoàn tất!")
     print(f"Kết quả lưu trữ tại: runs/segment/train_road/")
     print(f"Trọng số tốt nhất đã sẵn sàng tại: runs/segment/train_road/weights/best.pt")
-    print("Bạn có thể sử dụng export_onnx.py để chuyển đổi sang ONNX phục vụ tích hợp.")
 
 
 if __name__ == "__main__":

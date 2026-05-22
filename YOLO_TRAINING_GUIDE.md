@@ -1,6 +1,11 @@
 # 📖 Hướng dẫn Huấn luyện Mô hình YOLO Phân đoạn (YOLO Segmentation Training Guide)
 > **Tài liệu hướng dẫn chi tiết từ A-Z cách tiền xử lý dữ liệu, thiết lập cấu hình và huấn luyện các mô hình YOLO11n-seg cho cả hai bài toán: Phân đoạn làn đường (Road Segmentation) và Phân đoạn biển báo giao thông (Traffic Sign Segmentation).**
 
+> [!IMPORTANT]
+> **Bối cảnh Cuộc thi "UIT CAR RACING 2025 MÙA XIV - BẢNG CHUYÊN NGHIỆP"**:
+> * **Quy chế tính điểm**: Tự huấn luyện mô hình học sâu để tự nhận diện hình ảnh đạt **10 điểm / 1 checkpoint** (tối đa 100 điểm/vòng đua), trong khi sử dụng hình ảnh phân đoạn làn đường do Ban tổ chức cung cấp sẵn chỉ đạt **5 điểm / 1 checkpoint** (tối đa 50 điểm/vòng đua).
+> * **Quy chế nộp bài**: Toàn bộ mã nguồn chạy trên hệ thống của BTC thông qua tệp nén Docker Image (`.tar`). Bạn hãy tham khảo **Phần 5** cuối tài liệu để biết cách đóng gói Docker chuẩn thể lệ.
+
 ---
 
 ## 🛠️ 1. Môi trường & Thư viện Cần thiết (Environment Setup)
@@ -227,59 +232,68 @@ if __name__ == "__main__":
 
 ---
 
-## 🚀 4. Xuất Mô hình ONNX & Triển khai thời gian thực (ONNX Export)
+## 🚀 4. Triển khai thời gian thực trên Python Controller (Realtime Deployment)
 
-Sau khi quá trình huấn luyện hoàn tất, các file trọng số tốt nhất sẽ được lưu tại thư mục `runs/segment/train*/weights/best.pt`. Để đưa vào ứng dụng thực tế chạy thời gian thực hoặc tích hợp vào plugin **Unity Barracuda**, ta cần xuất mô hình sang định dạng **ONNX**:
+Sau khi quá trình huấn luyện hoàn tất, các tệp trọng số tốt nhất dạng PyTorch (`best.pt`) sẽ được lưu tại thư mục `runs/segment/train_road/weights/best.pt` (đối với làn đường) hoặc `runs/segment/train_signs/weights/best.pt` (đối với biển báo).
 
-Chạy script Python `training/export_onnx.py` để xuất mô hình tối ưu nhất:
-```python
-import os
-import argparse
-from ultralytics import YOLO
+Vì môi trường giả lập Unity do Ban tổ chức cung cấp là phiên bản phần mềm đóng gói sẵn (thí sinh không can thiệp được vào mã nguồn Unity C# để tích hợp ONNX/Barracuda), **toàn bộ luồng suy diễn (inference) và nhận diện hình ảnh sẽ được xử lý trực tiếp trên phía Python** (Python Controller):
 
-def export_model(weights_path, imgsz=320):
-    if not os.path.exists(weights_path):
-        print(f"[Error] Không tìm thấy file trọng số tại: {weights_path}")
-        return
+1. **Nạp trọng số mới trực tiếp vào mã nguồn điều khiển**:
+   Trong tệp [maycay.py](file:///d:/UIT-CAR-RACING/maycay.py), bạn chỉ cần thay đổi đường dẫn trỏ tới tệp trọng số `.pt` mới huấn luyện của mình:
+   ```python
+   # Load trọng số PyTorch .pt trực tiếp vào maycay.py để chạy
+   model = YOLO("runs/segment/train_road/weights/best.pt")
+   ```
 
-    print("Đang nạp mô hình...")
-    model = YOLO(weights_path)
+2. **Chạy suy diễn trực tiếp trên luồng hình ảnh truyền từ Unity**:
+   Python Controller nhận dữ liệu ảnh từ Socket thông qua hàm `GetRaw()` rồi trực tiếp chạy suy diễn:
+   ```python
+   # Nhận diện hình ảnh thời gian thực từ camera Unity Simulator
+   results = model.predict(source=raw_image, verbose=False)
+   ```
 
-    # Export sang ONNX với định dạng tối ưu hóa
-    print("Đang tiến hành export sang ONNX (simplify=True, opset=13)...")
-    model.export(
-        format="onnx",
-        imgsz=imgsz,
-        simplify=True,      # Tối giản đồ thị tính toán của mô hình (onnx-simplifier)
-        opset=13            # Phiên bản opset tương thích cao nhất với Unity Barracuda
-    )
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Export PyTorch YOLO segmentation model to ONNX format.")
-    parser.add_argument("--weights", type=str, default="/workspace/runs/segment/train_signs/weights/best.pt", 
-                        help="Path to weights file (.pt).")
-    parser.add_argument("--imgsz", type=int, default=320, 
-                        help="Image size used for export.")
-    
-    args = parser.parse_args()
-    weights_path = args.weights
-    
-    if not os.path.exists(weights_path):
-        # Tự động tìm kiếm trọng số dự phòng dựa theo cấu trúc dự án
-        project_road_model = os.path.normpath(os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 
-            "../Road_Seg_Model/modelYolo/weights/best.pt"
-        ))
-        if os.path.exists(project_road_model):
-            print(f"[Info] Tự động chọn mô hình làn đường của dự án: {project_road_model}")
-            weights_path = project_road_model
-        elif os.path.exists("best.pt"):
-            weights_path = "best.pt"
-
-    export_model(weights_path, args.imgsz)
-```
-Sau khi xuất, bạn sẽ nhận được file `best.onnx` sẵn sàng tích hợp trực tiếp vào dự án Unity của mình!
-
----
+3. **Tính toán góc lái thích ứng và gửi lệnh phản hồi** (`AVControl`) ngược lại Unity thông qua Socket để điều khiển xe tự động bám làn đường.
 > [!NOTE]
 > Mọi thắc mắc hoặc lỗi phát sinh trong quá trình huấn luyện, vui lòng đối chiếu với mã nguồn mẫu trong file `maycay.py` hoặc các log huấn luyện trước đó tại thư mục `runs/`.
+
+---
+
+## 📦 5. Hướng dẫn đóng gói & Xuất Docker Image nộp bài (Docker Submission Guide)
+
+Theo **Thể lệ Cuộc thi UIT CAR RACING 2025 MÙA XIV (Bảng Chuyên nghiệp)**, để nộp bài thi đấu vòng Sơ loại và Khởi động, các đội thi bắt buộc phải đóng gói toàn bộ mã nguồn điều khiển cùng môi trường chạy vào một Docker Image, sau đó xuất ra tệp nén (`.tar`) để Ban tổ chức import và chấm điểm trên máy chủ tập trung.
+
+Hãy tuân theo quy trình đóng gói chuẩn dưới đây để tránh lỗi thiếu môi trường hoặc thất lạc tệp tin:
+
+### Bước 1: Cam kết (Commit) các thay đổi từ Container đang chạy thành Image mới
+Khi bạn đang phát triển và chạy thử trong container (ví dụ đặt tên container là `it-car`), hãy mở một Terminal mới ở máy Host và chạy lệnh sau để lưu lại toàn bộ trạng thái code và thư viện đã cài đặt thành một Docker Image cục bộ mới:
+```bash
+# Định dạng: docker commit <tên_container> <tên_image_mới>:<tag>
+docker commit it-car uit_car_team_weights:v1.0
+```
+
+### Bước 2: Kiểm tra danh sách Docker Images cục bộ
+Đảm bảo Image mới đã được tạo lập thành công trong bộ nhớ máy của bạn:
+```bash
+docker images
+```
+Bạn sẽ nhìn thấy dòng `uit_car_team_weights` với tag `v1.0` hiển thị trong danh sách.
+
+### Bước 3: Xuất Docker Image ra tệp nén `.tar` để nộp bài
+Sử dụng lệnh `docker save` để ghi toàn bộ cấu trúc Image thành một tệp tin nén vật lý duy nhất:
+```bash
+# Định dạng: docker save -o <đường_dẫn_tệp_nén.tar> <tên_image>:<tag>
+docker save -o uit_car_team_submission.tar uit_car_team_weights:v1.0
+```
+> [!IMPORTANT]
+> Quá trình xuất có thể mất vài phút vì tệp chứa toàn bộ các thư viện Python sâu (PyTorch, Ultralytics, v.v.). Sau khi hoàn tất, bạn sẽ nhận được một tệp `uit_car_team_submission.tar` trong thư mục hiện hành.
+
+### Bước 4: Chuẩn bị tệp chú thích chạy code (`.txt`)
+Ban tổ chức yêu cầu đính kèm một file chú thích (nếu có). Hãy tạo tệp `instruction.txt` ngắn gọn nêu rõ:
+1. **Lệnh chạy chính**: Ví dụ `python /workspace/maycay.py`.
+2. **Cấu hình bổ sung**: Các tham số đặc biệt nếu có.
+
+### Bước 5: Nộp bài qua Form của BTC
+Nén cả hai thành phần gồm **Docker Image nén** (`uit_car_team_submission.tar`) và **Tệp chú thích** (`instruction.txt`) để gửi qua biểu mẫu nộp bài chính thức trước hạn chót của từng vòng đua. 
+
+---
+
